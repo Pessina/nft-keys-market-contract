@@ -3562,7 +3562,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nft_market_contract"
+name = "nft_keys_market_contract"
 version = "0.1.0"
 dependencies = [
  "near-sdk",

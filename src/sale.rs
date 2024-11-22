@@ -169,17 +169,11 @@ impl Contract {
             // Attach 1 yoctoNEAR with static GAS equal to the GAS for nft transfer. Also attach an unused GAS weight of 1 by default.
             .with_attached_deposit(ONE_YOCTONEAR)
             .with_static_gas(GAS_FOR_NFT_TRANSFER)
-            .nft_transfer_payout(
+            .nft_transfer(
                 buyer_id.clone(), //purchaser (person to transfer the NFT to)
                 token_id, //token ID to transfer
-                sale.approval_id, //market contract's approval ID in order to transfer the token on behalf of the owner
-            "payout from market".to_string(), //memo (to include some context)
-            /*
-                the price that the token was purchased for. This will be used in conjunction with the royalty percentages
-                for the token in order to determine how much money should go to which account. 
-            */
-            price,
-            10, //the maximum amount of accounts the market can payout at once (this is limited by GAS)
+                Some(sale.approval_id), //market contract's approval ID in order to transfer the token on behalf of the owner
+                Some("payout from market".to_string()), //memo (to include some context)
             )
         //after the transfer payout has been initiated, we resolve the promise by calling our own resolve_purchase function. 
         //resolve purchase will take the payout object returned from the nft_transfer_payout and actually pay the accounts
