@@ -3,6 +3,7 @@ use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
+    near,
     assert_one_yocto, env, ext_contract, near_bindgen, AccountId, BorshStorageKey, CryptoHash, Gas,
     NearToken, PanicOnDefault, Promise,
 };
@@ -30,7 +31,12 @@ const ONE_YOCTONEAR: NearToken = NearToken::from_yoctonear(1);
 static DELIMETER: &str = ".";
 
 //Creating custom types to use within the contract. This makes things more readable.
-pub type SalePriceInYoctoNear = NearToken;
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[near(serializers = [json, borsh])]
+pub struct SaleCondition {
+    pub token: String,
+    pub amount: u64,
+}
 pub type TokenId = String;
 pub type FungibleTokenId = AccountId;
 pub type ContractAndTokenId = String;

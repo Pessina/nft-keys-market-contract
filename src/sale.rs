@@ -16,7 +16,7 @@ pub struct Sale {
     //actual token ID for sale
     pub token_id: String,
     //sale price in yoctoNEAR that the token is listed for
-    pub sale_conditions: SalePriceInYoctoNear,
+    pub sale_conditions: SaleCondition,
 }
 
 //The Json token is what will be returned from view calls. 
@@ -36,7 +36,7 @@ impl Contract {
       nft_contract_id: AccountId,
       token_id: TokenId,
       approval_id: u32,
-      sale_conditions: SalePriceInYoctoNear,
+      sale_conditions: SaleCondition,
     ) {
         let owner_id = env::predecessor_account_id();
 
@@ -92,7 +92,7 @@ impl Contract {
         &mut self,
         nft_contract_id: AccountId,
         token_id: String,
-        price: NearToken,
+        price: SaleCondition,
     ) {
         //assert that the user has attached exactly 1 yoctoNEAR (for security reasons)
         assert_one_yocto();
@@ -119,7 +119,7 @@ impl Contract {
 
     //place an offer on a specific sale. The sale will go through as long as your deposit is greater than or equal to the list price
     #[payable]
-    pub fn offer(&mut self, nft_contract_id: AccountId, token_id: String) {
+    pub fn offer(&mut self, nft_contract_id: AccountId, token_id: String, offer_price: SaleCondition) {
         //get the attached deposit and make sure it's greater than 0
         let deposit = env::attached_deposit();
         assert!(!deposit.is_zero(), "Attached deposit must be greater than 0");
@@ -139,7 +139,19 @@ impl Contract {
         let price = sale.sale_conditions;
 
         //make sure the deposit is greater than the price
-        assert!(deposit.ge(&price), "Attached deposit must be greater than or equal to the current price: {:?}. Your deposit: {:?}", price, deposit);
+        assert!(
+            offer_price.amount.ge(&price.amount),
+            "Offer amount {} is less than the listed price {}",
+            offer_price.amount,
+            price.amount
+        );
+        assert_eq!(
+            offer_price.token,
+            price.token,
+            "Incorrect token offered. Expected {}, got {}",
+            price.token,
+            offer_price.token
+        );
 
         //process the purchase (which will remove the sale, transfer and get the payout from the nft contract, and then distribute royalties) 
         self.process_purchase(
@@ -262,7 +274,7 @@ impl Contract {
         nft_contract_id: AccountId,
         token_id: TokenId,
         approval_id: u32,
-        sale_conditions: SalePriceInYoctoNear,
+        sale_conditions: SaleCondition,
         #[callback_result] nft_token_result: Result<JsonToken, PromiseError>,
         #[callback_result] nft_is_approved_result: Result<bool, PromiseError>,
     ) {
