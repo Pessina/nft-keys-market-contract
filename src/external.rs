@@ -8,7 +8,7 @@ trait ExtContract {
         &mut self,
         receiver_id: AccountId,
         token_id: TokenId,
-        approval_id: Option<u32>,
+        approval_id: Option<u64>,
         memo: Option<String>,
     );
     fn nft_token(&self, token_id: TokenId);
@@ -16,6 +16,6 @@ trait ExtContract {
         &self,
         token_id: TokenId,
         approved_account_id: AccountId,
-        approval_id: u32,
+        approval_id: u64,
     );
 }

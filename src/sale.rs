@@ -10,7 +10,7 @@ pub struct Sale {
     //owner of the sale
     pub owner_id: AccountId,
     //market contract's approval ID to transfer the token on behalf of the owner
-    pub approval_id: u32,
+    pub approval_id: u64,
     //nft contract where the token was minted
     pub nft_contract_id: String,
     //actual token ID for sale
@@ -35,7 +35,7 @@ impl Contract {
       &mut self,
       nft_contract_id: AccountId,
       token_id: TokenId,
-      approval_id: u32,
+      approval_id: u64,
       sale_conditions: SaleCondition,
     ) {
         let owner_id = env::predecessor_account_id();
@@ -84,37 +84,6 @@ impl Contract {
         let owner_id = env::predecessor_account_id();
         //if this fails, the remove sale will revert
         assert_eq!(owner_id, sale.owner_id, "Must be sale owner");
-    }
-
-    //updates the price for a sale on the market
-    #[payable]
-    pub fn update_price(
-        &mut self,
-        nft_contract_id: AccountId,
-        token_id: String,
-        price: SaleCondition,
-    ) {
-        //assert that the user has attached exactly 1 yoctoNEAR (for security reasons)
-        assert_one_yocto();
-        
-        //create the unique sale ID from the nft contract and token
-        let contract_id: AccountId = nft_contract_id.into();
-        let contract_and_token_id = format!("{}{}{}", contract_id, DELIMETER, token_id);
-        
-        //get the sale object from the unique sale ID. If there is no token, panic. 
-        let mut sale = self.sales.get(&contract_and_token_id).expect("No sale");
-
-        //assert that the caller of the function is the sale owner
-        assert_eq!(
-            env::predecessor_account_id(),
-            sale.owner_id,
-            "Must be sale owner"
-        );
-        
-        //set the sale conditions equal to the passed in price
-        sale.sale_conditions = price;
-        //insert the sale back into the map for the unique sale ID
-        self.sales.insert(&contract_and_token_id, &sale);
     }
 
     //place an offer on a specific sale. The sale will go through as long as your deposit is greater than or equal to the list price
@@ -273,7 +242,7 @@ impl Contract {
         owner_id: AccountId,
         nft_contract_id: AccountId,
         token_id: TokenId,
-        approval_id: u32,
+        approval_id: u64,
         sale_conditions: SaleCondition,
         #[callback_result] nft_token_result: Result<JsonToken, PromiseError>,
         #[callback_result] nft_is_approved_result: Result<bool, PromiseError>,
