@@ -1,7 +1,5 @@
 use crate::*;
 
-/// external contract calls
-
 //initiate a cross contract call to the nft contract
 #[ext_contract(ext_contract)]
 trait ExtContract {
