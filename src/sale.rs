@@ -111,8 +111,8 @@ impl Contract {
         assert!(
             offer_price.amount.ge(&price.amount),
             "Offer amount {} is less than the listed price {}",
-            offer_price.amount,
-            price.amount
+            offer_price.amount.0,
+            price.amount.0
         );
         assert_eq!(
             offer_price.token,

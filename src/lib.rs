@@ -35,7 +35,7 @@ static DELIMETER: &str = ".";
 #[near(serializers = [json, borsh])]
 pub struct SaleCondition {
     pub token: String,
-    pub amount: u64,
+    pub amount: U128,
 }
 pub type TokenId = String;
 pub type FungibleTokenId = AccountId;

@@ -3,11 +3,7 @@ use crate::{sale::Sale, SaleCondition};
 #[cfg(test)]
 use crate::Contract;
 use near_sdk::{
-    collections::UnorderedSet,
-    env,
-    NearToken,
-    test_utils::{accounts, VMContextBuilder},
-    testing_env, AccountId,
+    collections::UnorderedSet, env, json_types::U128, test_utils::{accounts, VMContextBuilder}, testing_env, AccountId, NearToken
 };
 
 const MIN_REQUIRED_APPROVAL_YOCTO: NearToken = NearToken::from_yoctonear(170000000000000000000);
@@ -123,7 +119,7 @@ fn test_remove_sale() {
         token_id: token_id.clone(),                                 //the actual token ID
         sale_conditions: SaleCondition {
             token: "btc".to_string(),
-            amount: 10,
+            amount: U128::from(10),
         }, //the sale conditions -- price in YOCTO NEAR
     };
     let nft_contract_id = env::predecessor_account_id();
