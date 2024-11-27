@@ -1,19 +1,22 @@
+use near_sdk::log;
+
 use crate::*;
 
-/// approval callbacks from NFT Contracts
-
-//struct for keeping track of the sale conditions for a Sale
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SaleArgs {
+    pub path: String,
+    pub token: String,
     pub sale_conditions: SaleCondition,
 }
 
-/*
-    trait that will be used as the callback from the NFT contract. When nft_approve is
-    called, it will fire a cross contract call to this marketplace and this is the function
-    that is invoked. 
-*/
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct OfferArgs {
+    pub token_id: String,
+    pub path: String,
+}
+
 trait NonFungibleTokenApprovalsReceiver {
     fn nft_on_approve(
         &mut self,
@@ -24,11 +27,8 @@ trait NonFungibleTokenApprovalsReceiver {
     );
 }
 
-//implementation of the trait
 #[near_bindgen]
 impl NonFungibleTokenApprovalsReceiver for Contract {
-    /// where we add the sale because we know nft owner can only call nft_approve
-
     fn nft_on_approve(
         &mut self,
         token_id: TokenId,
@@ -36,83 +36,111 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
         approval_id: u64,
         msg: String,
     ) {
-        // get the contract ID which is the predecessor
         let nft_contract_id = env::predecessor_account_id();
         let signer_id = env::signer_account_id();
 
-        //we need to enforce that the user has enough storage for 1 EXTRA sale.  
+        // Try to parse as SaleArgs first
+        log!("Attempting to parse message as SaleArgs: {}", msg);
+        if let Ok(SaleArgs { token, path, sale_conditions }) = near_sdk::serde_json::from_str(&msg) {
+            log!("Successfully parsed SaleArgs. Token: {}, Path: {}", token, path);
+            
+            let storage_amount = self.storage_minimum_balance();
+            let owner_paid_storage = self.storage_deposits.get(&signer_id).unwrap_or(NearToken::from_yoctonear(0));
+            let storage_required = (self.get_supply_by_owner_id(nft_contract_id.clone()).0 + 1) as u128 * storage_amount.as_yoctonear();
+            
+            log!("Storage check - Paid: {}, Required: {}", owner_paid_storage, storage_required);
 
-        //get the storage for a sale. dot 0 converts from U128 to u128
-        let storage_amount = self.storage_minimum_balance();
-        //get the total storage paid by the owner
-        let owner_paid_storage = self.storage_deposits.get(&signer_id).unwrap_or(NearToken::from_yoctonear(0));
-        //get the storage required which is simply the storage for the number of sales they have + 1 
-        let storage_required = (self.get_supply_by_owner_id(nft_contract_id.clone()).0 + 1) as u128 * storage_amount.as_yoctonear();
-        
-        //make sure that the total paid is >= the required storage
-        assert!(
-            owner_paid_storage >= NearToken::from_yoctonear(storage_required),
-            "Insufficient storage paid: {}, for {} sales at {} per sale",
-            owner_paid_storage, 
-            storage_required / storage_amount.as_yoctonear(), 
-            storage_amount
-        );
+            assert!(
+                owner_paid_storage >= NearToken::from_yoctonear(storage_required),
+                "Insufficient storage paid: {}, for {} sales at {} per sale",
+                owner_paid_storage, 
+                storage_required / storage_amount.as_yoctonear(), 
+                storage_amount
+            );
 
-        //if all these checks pass we can create the sale conditions object.
-        let SaleArgs { sale_conditions } =
-            //the sale conditions come from the msg field. The market assumes that the user passed
-            //in a proper msg. If they didn't, it panics. 
-            near_sdk::serde_json::from_str(&msg).expect("Not valid SaleArgs");
+            let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, token_id);
+            log!("Creating sale with contract_and_token_id: {}", contract_and_token_id);
+            
+            self.sales.insert(
+                &contract_and_token_id,
+                &Sale {
+                    owner_id: owner_id.clone(),
+                    approval_id,
+                    nft_contract_id: nft_contract_id.to_string(),
+                    token_id: token_id.clone(),
+                    path,
+                    token,
+                    sale_conditions,
+               },
+            );
+            log!("Sale object created and inserted");
 
-        //create the unique sale ID which is the contract + DELIMITER + token ID
-        let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, token_id);
-        
-        //insert the key value pair into the sales map. Key is the unique ID. value is the sale object
-        self.sales.insert(
-            &contract_and_token_id,
-            &Sale {
-                owner_id: owner_id.clone(), //owner of the sale / token
-                approval_id, //approval ID for that token that was given to the market
-                nft_contract_id: nft_contract_id.to_string(), //NFT contract the token was minted on
-                token_id: token_id.clone(), //the actual token ID
-                sale_conditions, //the sale conditions 
-           },
-        );
-
-        //Extra functionality that populates collections necessary for the view calls 
-
-        //get the sales by owner ID for the given owner. If there are none, we create a new empty set
-        let mut by_owner_id = self.by_owner_id.get(&owner_id).unwrap_or_else(|| {
-            UnorderedSet::new(
-                StorageKey::ByOwnerIdInner {
-                    //we get a new unique prefix for the collection by hashing the owner
-                    account_id_hash: hash_account_id(&owner_id),
-                },
-            )
-        });
-        
-        //insert the unique sale ID into the set
-        by_owner_id.insert(&contract_and_token_id);
-        //insert that set back into the collection for the owner
-        self.by_owner_id.insert(&owner_id, &by_owner_id);
-
-        //get the token IDs for the given nft contract ID. If there are none, we create a new empty set
-        let mut by_nft_contract_id = self
-            .by_nft_contract_id
-            .get(&nft_contract_id)
-            .unwrap_or_else(|| {
+            let mut by_owner_id = self.by_owner_id.get(&owner_id).unwrap_or_else(|| {
+                log!("Creating new UnorderedSet for owner_id: {}", owner_id);
                 UnorderedSet::new(
-                    StorageKey::ByNFTContractIdInner {
-                        //we get a new unique prefix for the collection by hashing the owner
-                        account_id_hash: hash_account_id(&nft_contract_id),
+                    StorageKey::ByOwnerIdInner {
+                        account_id_hash: hash_account_id(&owner_id),
                     },
                 )
             });
-        
-        //insert the token ID into the set
-        by_nft_contract_id.insert(&token_id);
-        //insert the set back into the collection for the given nft contract ID
-        self.by_nft_contract_id
-            .insert(&nft_contract_id, &by_nft_contract_id);
+            
+            by_owner_id.insert(&contract_and_token_id);
+            self.by_owner_id.insert(&owner_id, &by_owner_id);
+            log!("Updated by_owner_id index");
+
+            let mut by_nft_contract_id = self
+                .by_nft_contract_id
+                .get(&nft_contract_id)
+                .unwrap_or_else(|| {
+                    log!("Creating new UnorderedSet for nft_contract_id: {}", nft_contract_id);
+                    UnorderedSet::new(
+                        StorageKey::ByNFTContractIdInner {
+                            account_id_hash: hash_account_id(&nft_contract_id),
+                        },
+                    )
+                });
+            
+            by_nft_contract_id.insert(&token_id);
+            self.by_nft_contract_id
+                .insert(&nft_contract_id, &by_nft_contract_id);
+            log!("Updated by_nft_contract_id index");
+
+        } else if let Ok(OfferArgs { token_id: purchase_token_id, path }) = near_sdk::serde_json::from_str(&msg) {
+            log!("Processing offer with purchase_token_id: {} and path: {}", purchase_token_id, path);
+            
+            // Handle offer logic
+            let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, purchase_token_id);
+            log!("Looking up sale for contract_and_token_id: {}", contract_and_token_id);
+            
+            let sale = self.sales.get(&contract_and_token_id).expect("No sale");
+            log!("Found sale owned by: {}", sale.owner_id);
+            
+            assert_ne!(sale.owner_id, signer_id, "Cannot bid on your own sale.");
+            log!("Validated signer is not sale owner");
+
+            // TODO: include balance of keys validation and TA signature validation
+            log!("TODO: Validate key balances and TA signatures");
+
+            /*
+                TODO: validate if the offer token: 
+                - is approved for transfer
+                - holds the necessary amount of tokens according to the sale conditions
+            */
+            log!("TODO: Validate offer token approval and balance");
+
+            log!("Processing purchase with nft_contract_id: {}, signer_id: {}, token_id: {}, owner_id: {}, sale_token_id: {}", 
+                nft_contract_id, signer_id, token_id, sale.owner_id, sale.token_id);
+                
+            self.process_purchase(
+                nft_contract_id,
+                signer_id,
+                token_id,
+                approval_id,
+                sale.owner_id,
+                sale.token_id,
+            );
+        } else {
+            log!("Invalid args - must be SaleArgs or OfferArgs");
+        }
     }
 }

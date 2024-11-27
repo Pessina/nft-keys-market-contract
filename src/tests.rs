@@ -121,6 +121,8 @@ fn test_remove_sale() {
             token: "btc".to_string(),
             amount: U128::from(10),
         }, //the sale conditions -- price in YOCTO NEAR
+        path: "".to_string(),
+        token: "".to_string(),
     };
     let nft_contract_id = env::predecessor_account_id();
     let contract_and_token_id = format!("{}{}{}", nft_contract_id, ".", token_id);
