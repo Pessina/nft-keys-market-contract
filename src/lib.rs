@@ -23,12 +23,7 @@ const GAS_FOR_NFT_TRANSFER: Gas = Gas::from_tgas(15);
 const ZERO_NEAR: NearToken = NearToken::from_yoctonear(0);
 const ONE_YOCTONEAR: NearToken = NearToken::from_yoctonear(1);
 static DELIMETER: &str = ".";
-#[derive(Debug, Clone, Eq, PartialEq)]
-#[near(serializers = [json, borsh])]
-pub struct SaleCondition {
-    pub token: String,
-    pub amount: U128,
-}
+
 pub type TokenId = String;
 pub type FungibleTokenId = AccountId;
 pub type ContractAndTokenId = String;
@@ -70,10 +65,10 @@ impl Contract {
     pub fn new(owner_id: AccountId) -> Self {
         let this = Self {
             owner_id,
-            sales: UnorderedMap::new(b"1"), // StorageKey::Sales
-            by_owner_id: LookupMap::new(b"2"), // StorageKey::ByOwnerId
-            by_nft_contract_id: LookupMap::new(b"3"), // StorageKey::ByNFTContractId
-            storage_deposits: LookupMap::new(b"4"), // StorageKey::StorageDeposits
+            sales: UnorderedMap::new(StorageKey::Sales),
+            by_owner_id: LookupMap::new(StorageKey::ByOwnerId),
+            by_nft_contract_id: LookupMap::new(StorageKey::ByNFTContractId),
+            storage_deposits: LookupMap::new(StorageKey::StorageDeposits),
         };
 
         this

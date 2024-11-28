@@ -1,6 +1,14 @@
 use crate::*;
 use near_sdk::NearSchema;
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[near(serializers = [json, borsh])]
+pub struct SaleCondition {
+    pub token: String,
+    pub amount: U128,
+}
+
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, NearSchema)]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde")]
