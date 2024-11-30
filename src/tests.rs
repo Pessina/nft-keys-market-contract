@@ -305,20 +305,32 @@ fn test_krnl_validation() {
         }
     
         // 4. Function Call Verification
-        let function_params_digest: [u8; 32] = Keccak256::digest(function_params.as_bytes()).into();
+        let function_params = if function_params.starts_with("0x") {
+            hex::decode(&function_params[2..]).unwrap()
+        } else {
+            hex::decode(&function_params).unwrap()
+        };
+
+        // Create token and encode using ethabi
+        let function_params_tokens = vec![Token::Bytes(function_params)];
+        let function_params_encoded = ethabi::encode(&function_params_tokens);
+        let function_params_digest: [u8; 32] = Keccak256::digest(&function_params_encoded).into();
         log!("LogFunctionCallVerification:");
         log!("paramsDigest: {}", hex::encode(&function_params_digest));
         // Should match: C03CE6D2AAD4D716935B81CBF71FADFE1196A21CA8DBBD10A24EAAD7A0B7BCBF
         
-        let mut data_to_digest = Vec::new();
-        data_to_digest.extend_from_slice(&function_params_digest);
-        data_to_digest.extend_from_slice(&kernel_params_digest);
-        data_to_digest.extend_from_slice(sender);
-        data_to_digest.extend_from_slice(&nonce);
-        data_to_digest.extend_from_slice(&[final_opinion as u8]);
-        
-        let data_digest: [u8; 32] = Keccak256::digest(&data_to_digest).into();
-        log!("dataDigest: {}", hex::encode(&data_digest));
+        // Create tokens for the data digest
+        let data_tokens = vec![
+            Token::FixedBytes(function_params_digest.to_vec()),
+            Token::FixedBytes(kernel_params_digest.to_vec()),
+            Token::Address(ethabi::ethereum_types::H160::from_slice(sender)),
+            Token::FixedBytes(nonce.to_vec()),
+            Token::Bool(final_opinion)
+        ];
+
+        // Encode and hash
+        let data_encoded = ethabi::encode(&data_tokens);
+        let data_digest: [u8; 32] = Keccak256::digest(&data_encoded).into();
         // Should match: 36C58C376E32B1F5775F6477A08B8222D9650469535AFE6BCD03156660C8BCF8
     
         if let Some(recovered_addr) = recover_eth_address(&data_digest, &signature_token) {
