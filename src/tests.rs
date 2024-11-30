@@ -192,15 +192,9 @@ fn test_krnl_validation() {
             }
         };
     
-        // Create message digest
-        let mut hasher = Keccak256::new();
-        let prefix = b"\x19Ethereum Signed Message:\n32";
-        hasher.update(prefix);
-        hasher.update(message_hash);
-    
         // Recover the public key
-        let verifying_key = match VerifyingKey::recover_from_digest(
-            hasher,
+        let verifying_key = match VerifyingKey::recover_from_prehash(
+            message_hash,
             &signature,
             recovery_id
         ) {
