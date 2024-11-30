@@ -278,15 +278,27 @@ fn test_krnl_validation() {
         }
     
         // 3. Kernel Params Verification
-        let mut kernel_params_data = Vec::new();
-        kernel_params_data.extend_from_slice(payload.kernel_param_objects.as_bytes());
-        kernel_params_data.extend_from_slice(sender);
+        let kernel_params = if payload.kernel_param_objects.starts_with("0x") {
+            hex::decode(&payload.kernel_param_objects[2..]).unwrap()
+        } else {
+            hex::decode(&payload.kernel_param_objects).unwrap()
+        };
         
+        // Create tokens exactly as Solidity's abi.encode(kernelParams, msg.sender)
+        let kernel_params_tokens = vec![
+            Token::Bytes(kernel_params),
+            Token::Address(ethabi::ethereum_types::H160::from_slice(sender))
+        ];
+        
+        // Encode using ethabi
+        let kernel_params_data = ethabi::encode(&kernel_params_tokens);
+        
+        // Hash using keccak256
         let calculated_kernel_params_digest: [u8; 32] = Keccak256::digest(&kernel_params_data).into();
+        
         log!("LogKernelParamsVerification:");
         log!("expected: {}", hex::encode(&kernel_params_digest));
         log!("actual: {}", hex::encode(&calculated_kernel_params_digest));
-        // Both should be: 1E8087402DEB673531E8F83D09263385E7B379C1D683FA5C0BF05BF2ED16BD7F
         
         if calculated_kernel_params_digest != kernel_params_digest {
             return false;
