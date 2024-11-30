@@ -166,6 +166,24 @@ fn test_krnl_validation() {
         kernel_param_objects: String,
     }
 
+    fn decode_hex(hex_str: &str) -> Vec<u8> {
+        hex::decode(hex_str.trim_start_matches("0x")).unwrap()
+    }
+
+    fn verify_recovered_address(recovered_addr: [u8; 20], token_authority: &str) -> bool {
+        let token_authority_bytes: [u8; 20] = hex::decode(token_authority)
+            .unwrap()[..20]
+            .try_into()
+            .unwrap();
+        recovered_addr == token_authority_bytes
+    }
+
+    // Helper function to create digest from tokens
+    fn create_digest(tokens: &[Token]) -> [u8; 32] {
+        let encoded = ethabi::encode(tokens);
+        Keccak256::digest(&encoded).into()
+    }
+
     fn recover_eth_address(message_hash: &[u8; 32], signature: &[u8]) -> Option<[u8; 20]> {
         if signature.len() != 65 {
             log!("Invalid signature length: {}", signature.len());
@@ -176,7 +194,7 @@ fn test_krnl_validation() {
         let v = v_byte[0];
 
         // Create signature object
-        let signature: K256Signature = K256Signature::try_from(r_s_bytes).map_err(|_| {
+        let signature = K256Signature::try_from(r_s_bytes).map_err(|_| {
             log!("Invalid signature format");
             None::<K256Signature>
         }).unwrap();
@@ -232,24 +250,19 @@ fn test_krnl_validation() {
         log!("final_opinion: {}", if final_opinion { "True" } else { "False" });
 
         // 2. Kernel Responses Verification
-        let kernel_responses = hex::decode(payload.kernel_responses.trim_start_matches("0x")).unwrap();
-        
+        let kernel_responses = decode_hex(&payload.kernel_responses);
         let kernel_responses_tokens = vec![
             Token::Bytes(kernel_responses),
             Token::Address(H160::from_slice(sender))
         ];
-        
-        let kernel_responses_data = ethabi::encode(&kernel_responses_tokens);
-        let kernel_responses_digest: [u8; 32] = Keccak256::digest(&kernel_responses_data).into();
+        let kernel_responses_digest = create_digest(&kernel_responses_tokens);
         
         log!("LogKernelResponsesVerification:");
         log!("digest: {}", hex::encode(&kernel_responses_digest));
 
         if let Some(recovered_addr) = recover_eth_address(&kernel_responses_digest, &kernel_responses_sig) {
             log!("recovered: {}", hex::encode(&recovered_addr));
-            let token_authority = hex::decode(TOKEN_AUTHORITY_ADDRESS).unwrap();
-            let token_authority_bytes: [u8; 20] = token_authority[..20].try_into().unwrap();
-            if recovered_addr != token_authority_bytes {
+            if !verify_recovered_address(recovered_addr, TOKEN_AUTHORITY_ADDRESS) {
                 log!("Invalid recovered address for kernel responses");
                 return false;
             }
@@ -259,15 +272,12 @@ fn test_krnl_validation() {
         }
 
         // 3. Kernel Params Verification
-        let kernel_params = hex::decode(payload.kernel_param_objects.trim_start_matches("0x")).unwrap();
-        
+        let kernel_params = decode_hex(&payload.kernel_param_objects);
         let kernel_params_tokens = vec![
             Token::Bytes(kernel_params),
             Token::Address(H160::from_slice(sender))
         ];
-        
-        let kernel_params_data = ethabi::encode(&kernel_params_tokens);
-        let calculated_kernel_params_digest: [u8; 32] = Keccak256::digest(&kernel_params_data).into();
+        let calculated_kernel_params_digest = create_digest(&kernel_params_tokens);
         
         log!("LogKernelParamsVerification:");
         log!("expected: {}", hex::encode(&kernel_params_digest));
@@ -278,11 +288,9 @@ fn test_krnl_validation() {
         }
 
         // 4. Function Call Verification
-        let function_params = hex::decode(function_params.trim_start_matches("0x")).unwrap();
-
+        let function_params = decode_hex(function_params);
         let function_params_tokens = vec![Token::Bytes(function_params)];
-        let function_params_encoded = ethabi::encode(&function_params_tokens);
-        let function_params_digest: [u8; 32] = Keccak256::digest(&function_params_encoded).into();
+        let function_params_digest = create_digest(&function_params_tokens);
         
         log!("LogFunctionCallVerification:");
         log!("paramsDigest: {}", hex::encode(&function_params_digest));
@@ -295,14 +303,11 @@ fn test_krnl_validation() {
             Token::Bool(final_opinion)
         ];
 
-        let data_encoded = ethabi::encode(&data_tokens);
-        let data_digest: [u8; 32] = Keccak256::digest(&data_encoded).into();
+        let data_digest = create_digest(&data_tokens);
 
         if let Some(recovered_addr) = recover_eth_address(&data_digest, &signature_token) {
             log!("recovered: {}", hex::encode(&recovered_addr));
-            let token_authority = hex::decode(TOKEN_AUTHORITY_ADDRESS).unwrap();
-            let token_authority_bytes: [u8; 20] = token_authority[..20].try_into().unwrap();
-            if recovered_addr != token_authority_bytes {
+            if !verify_recovered_address(recovered_addr, TOKEN_AUTHORITY_ADDRESS) {
                 return false;
             }
         } else {
@@ -318,10 +323,7 @@ fn test_krnl_validation() {
             return None;
         }
 
-        let auth_bytes = hex::decode(&auth_data[2..]).map_err(|e| {
-            log!("Failed to decode hex string: {:?}", e);
-            None::<Vec<u8>>
-        }).unwrap();
+        let auth_bytes = decode_hex(auth_data);
 
         let param_types = vec![
             ParamType::Bytes,
