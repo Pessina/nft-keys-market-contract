@@ -1,14 +1,18 @@
 use hex;
 use k256::ecdsa::{Signature as K256Signature, RecoveryId, VerifyingKey}; 
-use near_sdk::log;
+use near_sdk::{
+    log, 
+    serde::{Serialize, Deserialize},
+};
 use sha3::{Digest, Keccak256};
 use ethabi::{decode, ParamType, Token, ethereum_types::H160};
+use schemars::JsonSchema;
 
 use crate::*;
 
 const TOKEN_AUTHORITY_ADDRESS: &str = "0b3D85B517375E88Beb482E21EA4f14fEc302a62"; 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub struct KrnlPayload {
     pub auth: String,
@@ -152,8 +156,12 @@ pub fn decode_auth(auth_data: &str) -> Option<(Vec<u8>, [u8; 32], Vec<u8>, [u8; 
     ))
 }
 
+#[near_bindgen]
 impl Contract {
-    pub fn is_krnl_authorized(&self, function_params: &str, payload: &KrnlPayload, sender: &[u8; 20]) -> bool {
+    pub fn is_krnl_authorized(&self, function_params: String, payload: KrnlPayload, sender: String) -> bool {
+        let function_params = decode_hex(&function_params);
+        let sender = decode_hex(&sender);
+
         // 1. Auth Decoding
         let auth_data = match decode_auth(&payload.auth) {
             Some(data) => {
@@ -182,7 +190,7 @@ impl Contract {
         let kernel_responses = decode_hex(&payload.kernel_responses);
         let kernel_responses_tokens = vec![
             Token::Bytes(kernel_responses),
-            Token::Address(H160::from_slice(sender))
+            Token::Address(H160::from_slice(&sender))
         ];
         let kernel_responses_digest = create_digest(&kernel_responses_tokens);
         
@@ -204,7 +212,7 @@ impl Contract {
         let kernel_params = decode_hex(&payload.kernel_param_objects);
         let kernel_params_tokens = vec![
             Token::Bytes(kernel_params),
-            Token::Address(H160::from_slice(sender))
+            Token::Address(H160::from_slice(&sender))
         ];
         let calculated_kernel_params_digest = create_digest(&kernel_params_tokens);
         
@@ -217,7 +225,6 @@ impl Contract {
         }
     
         // 4. Function Call Verification
-        let function_params = decode_hex(function_params);
         let function_params_tokens = vec![Token::Bytes(function_params)];
         let function_params_digest = create_digest(&function_params_tokens);
         
@@ -227,7 +234,7 @@ impl Contract {
         let data_tokens = vec![
             Token::FixedBytes(function_params_digest.to_vec()),
             Token::FixedBytes(kernel_params_digest.to_vec()),
-            Token::Address(H160::from_slice(sender)),
+            Token::Address(H160::from_slice(&sender)),
             Token::FixedBytes(nonce.to_vec()),
             Token::Bool(final_opinion)
         ];
