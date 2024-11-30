@@ -150,13 +150,14 @@ fn test_remove_sale() {
         "Failed to remove sale from contract"
     );
 }
+
 #[test]
 fn test_krnl_validation() {
     use hex;
     use k256::ecdsa::{Signature as K256Signature, RecoveryId, VerifyingKey};
     use near_sdk::log;
     use sha3::{Digest, Keccak256};
-    use ethabi::{decode, ParamType, Token};
+    use ethabi::{decode, ParamType, Token, ethereum_types::H160};
 
     #[derive(Debug)]
     struct KrnlPayload {
@@ -170,41 +171,32 @@ fn test_krnl_validation() {
             log!("Invalid signature length: {}", signature.len());
             return None;
         }
-    
+
         let (r_s_bytes, v_byte) = signature.split_at(64);
         let v = v_byte[0];
-    
+
         // Create signature object
-        let signature = match K256Signature::try_from(r_s_bytes) {
-            Ok(sig) => sig,
-            Err(_) => {
-                log!("Invalid signature format");
-                return None;
-            }
-        };
-    
+        let signature: K256Signature = K256Signature::try_from(r_s_bytes).map_err(|_| {
+            log!("Invalid signature format");
+            None::<K256Signature>
+        }).unwrap();
+
         // Create recovery ID
-        let recovery_id = match RecoveryId::try_from(if v >= 27 { v - 27 } else { v }) {
-            Ok(rid) => rid,
-            Err(_) => {
-                log!("Invalid recovery ID");
-                return None;
-            }
-        };
-    
+        let recovery_id = RecoveryId::try_from(if v >= 27 { v - 27 } else { v }).map_err(|_| {
+            log!("Invalid recovery ID");
+            None::<RecoveryId>
+        }).unwrap();
+
         // Recover the public key
-        let verifying_key = match VerifyingKey::recover_from_prehash(
+        let verifying_key = VerifyingKey::recover_from_prehash(
             message_hash,
             &signature,
             recovery_id
-        ) {
-            Ok(key) => key,
-            Err(_) => {
-                log!("Failed to recover public key");
-                return None;
-            }
-        };
-    
+        ).map_err(|_| {
+            log!("Failed to recover public key");
+            None::<VerifyingKey>
+        }).unwrap();
+
         // Convert to Ethereum address
         let public_key = verifying_key.to_encoded_point(false);
         let mut hasher = Keccak256::new();
@@ -226,46 +218,35 @@ fn test_krnl_validation() {
                 return false
             }
         };
-    
+
         let (kernel_responses_sig, kernel_params_digest, signature_token, nonce, final_opinion) = auth_data;
-        // log!("LogIsAuthorized:");
-        // log!("kernel_responses_sig: {}", hex::encode(&kernel_responses_sig));
-        // log!("kernel_params_digest: {}", hex::encode(&kernel_params_digest));
-        // log!("signature_token: {}", hex::encode(&signature_token));
-        // log!("nonce: {}", hex::encode(&nonce));
-        // log!("final_opinion: {}", final_opinion);
-    
         if !final_opinion {
             return false;
         }
-    
+
+        log!("LogIsAuthorized");
+        log!("kernel_responses_sig: {}", hex::encode(&kernel_responses_sig).to_uppercase());
+        log!("kernel_params_digest: {}", hex::encode(&kernel_params_digest).to_uppercase());
+        log!("signature_token: {}", hex::encode(&signature_token).to_uppercase());
+        log!("nonce: {}", hex::encode(&nonce).to_uppercase());
+        log!("final_opinion: {}", if final_opinion { "True" } else { "False" });
+
         // 2. Kernel Responses Verification
-        // We need to use ethabi to encode the data the same way Solidity does
-        let kernel_responses = if payload.kernel_responses.starts_with("0x") {
-            hex::decode(&payload.kernel_responses[2..]).unwrap()
-        } else {
-            hex::decode(&payload.kernel_responses).unwrap()
-        };
+        let kernel_responses = hex::decode(payload.kernel_responses.trim_start_matches("0x")).unwrap();
         
-        // Create tokens exactly as Solidity's abi.encode(kernelResponses, msg.sender)
         let kernel_responses_tokens = vec![
             Token::Bytes(kernel_responses),
-            Token::Address(ethabi::ethereum_types::H160::from_slice(sender))
+            Token::Address(H160::from_slice(sender))
         ];
         
-        // Encode using ethabi
         let kernel_responses_data = ethabi::encode(&kernel_responses_tokens);
-        
-        // Hash using keccak256
         let kernel_responses_digest: [u8; 32] = Keccak256::digest(&kernel_responses_data).into();
         
         log!("LogKernelResponsesVerification:");
         log!("digest: {}", hex::encode(&kernel_responses_digest));
-        // Should match: C5F4D0224C83A4D153B3B1BCFAFB0D567355BC0DA03CA7BF411635BD2DE7696E        
 
         if let Some(recovered_addr) = recover_eth_address(&kernel_responses_digest, &kernel_responses_sig) {
             log!("recovered: {}", hex::encode(&recovered_addr));
-            // Should match: 0x0b3D85B517375E88Beb482E21EA4f14fEc302a62
             let token_authority = hex::decode(TOKEN_AUTHORITY_ADDRESS).unwrap();
             let token_authority_bytes: [u8; 20] = token_authority[..20].try_into().unwrap();
             if recovered_addr != token_authority_bytes {
@@ -276,24 +257,16 @@ fn test_krnl_validation() {
             log!("Failed to recover address from kernel responses signature");
             return false;
         }
-    
+
         // 3. Kernel Params Verification
-        let kernel_params = if payload.kernel_param_objects.starts_with("0x") {
-            hex::decode(&payload.kernel_param_objects[2..]).unwrap()
-        } else {
-            hex::decode(&payload.kernel_param_objects).unwrap()
-        };
+        let kernel_params = hex::decode(payload.kernel_param_objects.trim_start_matches("0x")).unwrap();
         
-        // Create tokens exactly as Solidity's abi.encode(kernelParams, msg.sender)
         let kernel_params_tokens = vec![
             Token::Bytes(kernel_params),
-            Token::Address(ethabi::ethereum_types::H160::from_slice(sender))
+            Token::Address(H160::from_slice(sender))
         ];
         
-        // Encode using ethabi
         let kernel_params_data = ethabi::encode(&kernel_params_tokens);
-        
-        // Hash using keccak256
         let calculated_kernel_params_digest: [u8; 32] = Keccak256::digest(&kernel_params_data).into();
         
         log!("LogKernelParamsVerification:");
@@ -303,39 +276,30 @@ fn test_krnl_validation() {
         if calculated_kernel_params_digest != kernel_params_digest {
             return false;
         }
-    
-        // 4. Function Call Verification
-        let function_params = if function_params.starts_with("0x") {
-            hex::decode(&function_params[2..]).unwrap()
-        } else {
-            hex::decode(&function_params).unwrap()
-        };
 
-        // Create token and encode using ethabi
+        // 4. Function Call Verification
+        let function_params = hex::decode(function_params.trim_start_matches("0x")).unwrap();
+
         let function_params_tokens = vec![Token::Bytes(function_params)];
         let function_params_encoded = ethabi::encode(&function_params_tokens);
         let function_params_digest: [u8; 32] = Keccak256::digest(&function_params_encoded).into();
+        
         log!("LogFunctionCallVerification:");
         log!("paramsDigest: {}", hex::encode(&function_params_digest));
-        // Should match: C03CE6D2AAD4D716935B81CBF71FADFE1196A21CA8DBBD10A24EAAD7A0B7BCBF
         
-        // Create tokens for the data digest
         let data_tokens = vec![
             Token::FixedBytes(function_params_digest.to_vec()),
             Token::FixedBytes(kernel_params_digest.to_vec()),
-            Token::Address(ethabi::ethereum_types::H160::from_slice(sender)),
+            Token::Address(H160::from_slice(sender)),
             Token::FixedBytes(nonce.to_vec()),
             Token::Bool(final_opinion)
         ];
 
-        // Encode and hash
         let data_encoded = ethabi::encode(&data_tokens);
         let data_digest: [u8; 32] = Keccak256::digest(&data_encoded).into();
-        // Should match: 36C58C376E32B1F5775F6477A08B8222D9650469535AFE6BCD03156660C8BCF8
-    
+
         if let Some(recovered_addr) = recover_eth_address(&data_digest, &signature_token) {
             log!("recovered: {}", hex::encode(&recovered_addr));
-            // Should match: 0x0b3D85B517375E88Beb482E21EA4f14fEc302a62
             let token_authority = hex::decode(TOKEN_AUTHORITY_ADDRESS).unwrap();
             let token_authority_bytes: [u8; 20] = token_authority[..20].try_into().unwrap();
             if recovered_addr != token_authority_bytes {
@@ -344,47 +308,34 @@ fn test_krnl_validation() {
         } else {
             return false;
         }
-    
+
         true
     }
 
-
     fn decode_auth(auth_data: &str) -> Option<(Vec<u8>, [u8; 32], Vec<u8>, [u8; 32], bool)> {
-        // Validate hex string format and remove "0x" prefix
         if !auth_data.starts_with("0x") {
             log!("Auth data must start with 0x");
             return None;
         }
-        let auth_data = &auth_data[2..];
 
-        // Decode hex string to bytes
-        let auth_bytes = match hex::decode(auth_data) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                log!("Failed to decode hex string: {:?}", e);
-                return None;
-            }
-        };
+        let auth_bytes = hex::decode(&auth_data[2..]).map_err(|e| {
+            log!("Failed to decode hex string: {:?}", e);
+            None::<Vec<u8>>
+        }).unwrap();
 
-        // Define the parameter types matching Solidity's abi.decode(auth, (bytes, bytes32, bytes, bytes32, bool))
         let param_types = vec![
-            ParamType::Bytes,      // kernel_responses_signature
-            ParamType::FixedBytes(32), // kernel_params_digest
-            ParamType::Bytes,      // signature_token
-            ParamType::FixedBytes(32), // nonce
-            ParamType::Bool,       // final_opinion
+            ParamType::Bytes,
+            ParamType::FixedBytes(32),
+            ParamType::Bytes,
+            ParamType::FixedBytes(32),
+            ParamType::Bool,
         ];
 
-        // Decode the ABI-encoded data
-        let tokens = match decode(&param_types, &auth_bytes) {
-            Ok(tokens) => tokens,
-            Err(e) => {
-                log!("Failed to decode ABI data: {:?}", e);
-                return None;
-            }
-        };
+        let tokens = decode(&param_types, &auth_bytes).map_err(|e| {
+            log!("Failed to decode ABI data: {:?}", e);
+            None::<Vec<Token>>
+        }).unwrap();
 
-        // Extract values from tokens
         if tokens.len() != 5 {
             log!("Invalid number of decoded tokens");
             return None;
@@ -437,13 +388,6 @@ fn test_krnl_validation() {
                 return None;
             }
         };
-
-        log!("Decoded auth components:");
-        log!("- kernel_responses_sig: {}", hex::encode(&kernel_responses_sig));
-        log!("- kernel_params_digest: {}", hex::encode(&kernel_params_digest));
-        log!("- signature_token: {}", hex::encode(&signature_token));
-        log!("- nonce: {}", hex::encode(&nonce));
-        log!("- final_opinion: {}", final_opinion);
 
         Some((
             kernel_responses_sig,

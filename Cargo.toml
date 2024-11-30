@@ -13,15 +13,10 @@ k256 = { version = "0.13.4", features = ["sha256", "ecdsa", "serde", "arithmetic
 hex = "0.4.3"
 serde_json = "1.0"
 anyhow = "1.0"
-thiserror = "2.0.3"
-reqwest = { version = "0.12.9", features = ["json"] }
-tokio = { version = "1.41.1", features = ["full"] }
 ethabi = "18.0.0"
 ethereum-types = "0.15.1"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 sha3 = "0.10.8"
-alloy-sol-types = "0.8.14"
-alloy-primitives = "0.8.14"
 
 [dev-dependencies]
 near-sdk = { version = "5.1.0", features = ["unit-testing"] }
