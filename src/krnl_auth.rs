@@ -5,7 +5,7 @@ use near_sdk::{
     serde::{Serialize, Deserialize},
 };
 use sha3::{Digest, Keccak256};
-use ethabi::{decode, ParamType, Token, ethereum_types::H160};
+use ethabi::{decode, ethereum_types::H160, ParamType, Token};
 use schemars::JsonSchema;
 
 use crate::*;
@@ -18,6 +18,13 @@ pub struct KrnlPayload {
     pub auth: String,
     pub kernel_responses: String, 
     pub kernel_param_objects: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(crate = "near_sdk::serde")]
+pub struct KernelResponse {
+    pub balance: String,
+    pub wallet: String,
 }
 
 pub fn decode_hex(hex_str: &str) -> Vec<u8> {
@@ -251,5 +258,51 @@ impl Contract {
         }
     
         true
+    }
+
+
+    pub fn decode_kernel_responses(&self, kernel_responses: String) -> KernelResponse {
+        let kernel_responses_bytes = decode_hex(&kernel_responses);
+
+        let param_types = vec![
+            ParamType::Array(Box::new(ParamType::Tuple(vec![
+                ParamType::Uint(256),    // kernelId
+                ParamType::Bytes,        // result 
+                ParamType::String,       // err
+            ])))
+        ];
+
+        let tokens = decode(&param_types, &kernel_responses_bytes).unwrap();
+
+        if let Token::Array(responses) = &tokens[0] {
+            if let Token::Tuple(fields) = &responses[0] {
+                if let Token::Bytes(bytes) = &fields[1] {
+                    let result = hex::encode(bytes);
+                    
+                    let result_bytes = hex::decode(&result).unwrap();
+                    let result_param_types = vec![
+                        ParamType::Tuple(vec![
+                            ParamType::String,  // balance
+                            ParamType::String   // wallet
+                        ])
+                    ];
+                    let result_tokens = decode(&result_param_types, &result_bytes).unwrap();
+
+                    if let Token::Tuple(fields) = &result_tokens[0] {
+                        if let (Token::String(balance), Token::String(wallet)) = (&fields[0], &fields[1]) {
+                            return KernelResponse {
+                                balance: balance.to_string(),
+                                wallet: wallet.to_string()
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        KernelResponse {
+            balance: "".to_string(),
+            wallet: "".to_string()
+        }
     }
 }
