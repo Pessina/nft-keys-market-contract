@@ -1,8 +1,10 @@
+use crate::kdf::{derive_btc_address_and_public_key, derive_eth_address, naj_to_pub_key};
 use crate::{sale::Sale, SaleCondition};
 use crate::krnl_auth::KrnlPayload;
 
 #[cfg(test)]
 use crate::Contract;
+use bitcoin::{CompressedPublicKey, Network};
 use near_sdk::{
     collections::UnorderedSet, env, json_types::U128, test_utils::{accounts, VMContextBuilder}, testing_env, AccountId, NearToken
 };
@@ -186,3 +188,30 @@ fn test_decode_kernel_responses() {
     assert_eq!(kernel_response.balance, "1000000");
     assert_eq!(kernel_response.wallet, "3K6ayt7KaBVSKGLRk2Gg9grbQW5pTPR7C3");
 }
+#[test]
+fn test_btc_address_derivation() {
+    // Test with a known public key in compressed hex format
+    let public_key = naj_to_pub_key("secp256k1:4YQV2wFC2K7icniJgimceF3MFxCd2mPi2jzWax96keRcC183qTLPLticoqPfu62cfU9VcUQRubLRYuf6xPyH45Pw", true).unwrap();
+    
+    // Test derivation for testnet
+    let address = derive_btc_address_and_public_key(
+        &public_key,
+        Network::Testnet
+    ).expect("Address derivation failed");
+
+    assert_eq!(address, "tb1qp47syg7nq26w3mehq594yq93cvcx4eatrvrtmc", "Public key should match input");
+}
+
+#[test]
+fn test_eth_address_derivation() {
+    // Test with the same NAJ public key used in BTC test for consistency
+    let public_key = naj_to_pub_key("secp256k1:4KjWXkJh5dLrcoaem6YmaXUocpipRz3D8HRsyjbGTsDCWcZrB7MD4m1nyeWuxfafg868XsHFDfW1WmRPQAuhrcTn", false).unwrap();
+    
+    // Derive Ethereum address
+    let eth_address = derive_eth_address(&public_key).expect("ETH address derivation failed");
+
+    assert_eq!(eth_address, "0xbd369f12f46c24837aa6bb4f8abede5cbee6e35a", "ETH address should match expected value");
+}
+
+
+

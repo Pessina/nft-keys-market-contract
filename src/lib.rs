@@ -19,6 +19,7 @@ mod nft_callbacks;
 mod sale;
 mod sale_views;
 mod krnl_auth;
+mod kdf;
 
 const GAS_FOR_NFT_TRANSFER: Gas = Gas::from_tgas(15);
 const ZERO_NEAR: NearToken = NearToken::from_yoctonear(0);
