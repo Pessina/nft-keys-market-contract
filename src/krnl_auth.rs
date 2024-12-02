@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 
 use crate::*;
 
-const TOKEN_AUTHORITY_ADDRESS: &str = "0b3D85B517375E88Beb482E21EA4f14fEc302a62"; 
+const TOKEN_AUTHORITY_ADDRESS: &str = "Cf7DDd53574c3664e58fb3f70209c626409406F1"; 
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -31,8 +31,8 @@ pub struct KrnlPayload {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub struct KernelResponse {
+    pub address: String,
     pub balance: String,
-    pub wallet: String,
 }
 
 pub fn decode_hex(hex_str: &str) -> Vec<u8> {
@@ -290,17 +290,17 @@ impl Contract {
                     let result_bytes = hex::decode(&result).unwrap();
                     let result_param_types = vec![
                         ParamType::Tuple(vec![
-                            ParamType::String,  // balance
-                            ParamType::String   // wallet
+                            ParamType::String,  // address
+                            ParamType::String   // balance
                         ])
                     ];
                     let result_tokens = decode(&result_param_types, &result_bytes).unwrap();
 
                     if let Token::Tuple(fields) = &result_tokens[0] {
-                        if let (Token::String(balance), Token::String(wallet)) = (&fields[0], &fields[1]) {
+                        if let (Token::String(address), Token::String(balance)) = (&fields[0], &fields[1]) {
                             return KernelResponse {
                                 balance: balance.to_string(),
-                                wallet: wallet.to_string()
+                                address: address.to_string()
                             };
                         }
                     }
@@ -310,7 +310,7 @@ impl Contract {
 
         KernelResponse {
             balance: "".to_string(),
-            wallet: "".to_string()
+            address: "".to_string()
         }
     }
 }
