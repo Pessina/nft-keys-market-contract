@@ -16,6 +16,7 @@ pub struct SaleArgs {
 pub struct OfferArgs {
     pub token_id: String,
     pub krnl_payload: KrnlPayload,
+    pub debug_disable_check: bool,
 }
 
 trait NonFungibleTokenApprovalsReceiver {
@@ -106,7 +107,7 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
                 .insert(&nft_contract_id, &by_nft_contract_id);
             log!("Updated by_nft_contract_id index");
 
-        } else if let Ok(OfferArgs { token_id: purchase_token_id, krnl_payload}) = near_sdk::serde_json::from_str(&msg) {
+        } else if let Ok(OfferArgs { token_id: purchase_token_id, krnl_payload, debug_disable_check}) = near_sdk::serde_json::from_str(&msg) {
             log!("Processing offer with purchase_token_id: {}", purchase_token_id);
 
             let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, purchase_token_id);
@@ -118,20 +119,22 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
             assert_ne!(sale.owner_id, signer_id, "Cannot bid on your own sale.");
             log!("Validated signer is not sale owner");
 
-            require!(self.is_krnl_authorized(krnl_payload.clone()), "Kernel authorization failed");
+            if !debug_disable_check {
+                require!(self.is_krnl_authorized(krnl_payload.clone()), "Kernel authorization failed");
 
-            let wallet = self.decode_kernel_responses(krnl_payload.auth.kernel_responses);
-            let offer_address = self.get_address(format!("{},", token_id), sale.sale_conditions.token, env::predecessor_account_id().to_string());
+                let wallet = self.decode_kernel_responses(krnl_payload.auth.kernel_responses);
+                let offer_address = self.get_address(format!("{},", token_id), sale.sale_conditions.token, env::predecessor_account_id().to_string());
 
-            log!("Wallet wallet: {}", wallet.wallet);
-            log!("Offer address: {}", offer_address);
+                log!("Wallet wallet: {}", wallet.wallet);
+                log!("Offer address: {}", offer_address);
 
-            require!(offer_address == wallet.wallet, "Offer address does not match");
-            require!(U128::from(wallet.balance.parse::<u128>().unwrap()) >= sale.sale_conditions.amount, "Offer token does not hold the necessary amount");
+                require!(offer_address == wallet.wallet, "Offer address does not match");
+                require!(U128::from(wallet.balance.parse::<u128>().unwrap()) >= sale.sale_conditions.amount, "Offer token does not hold the necessary amount");
+            }
 
             log!("Processing purchase with nft_contract_id: {}, signer_id: {}, token_id: {}, owner_id: {}, sale_token_id: {}", 
                 nft_contract_id, signer_id, token_id, sale.owner_id, sale.token_id);
-                
+
             self.process_purchase(
                 nft_contract_id,
                 signer_id,
