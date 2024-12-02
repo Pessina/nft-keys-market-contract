@@ -12,12 +12,20 @@ use crate::*;
 
 const TOKEN_AUTHORITY_ADDRESS: &str = "0b3D85B517375E88Beb482E21EA4f14fEc302a62"; 
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub struct KrnlPayload {
+pub struct KrnlAuth {
     pub auth: String,
     pub kernel_responses: String, 
     pub kernel_param_objects: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct KrnlPayload {
+    pub function_params: String,
+    pub sender: String,
+    pub auth: KrnlAuth,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -165,12 +173,12 @@ pub fn decode_auth(auth_data: &str) -> Option<(Vec<u8>, [u8; 32], Vec<u8>, [u8; 
 
 #[near_bindgen]
 impl Contract {
-    pub fn is_krnl_authorized(&self, function_params: String, payload: KrnlPayload, sender: String) -> bool {
-        let function_params = decode_hex(&function_params);
-        let sender = decode_hex(&sender);
+    pub fn is_krnl_authorized(&self, krnl_payload: KrnlPayload) -> bool {
+        let function_params = decode_hex(&krnl_payload.function_params);
+        let sender = decode_hex(&krnl_payload.sender);
 
         // 1. Auth Decoding
-        let auth_data = match decode_auth(&payload.auth) {
+        let auth_data = match decode_auth(&krnl_payload.auth.auth) {
             Some(data) => {
                 log!("LogDecodingAuth: true");
                 data
@@ -194,7 +202,7 @@ impl Contract {
         log!("final_opinion: {}", if final_opinion { "True" } else { "False" });
     
         // 2. Kernel Responses Verification
-        let kernel_responses = decode_hex(&payload.kernel_responses);
+        let kernel_responses = decode_hex(&krnl_payload.auth.kernel_responses);
         let kernel_responses_tokens = vec![
             Token::Bytes(kernel_responses),
             Token::Address(H160::from_slice(&sender))
@@ -216,7 +224,7 @@ impl Contract {
         }
     
         // 3. Kernel Params Verification
-        let kernel_params = decode_hex(&payload.kernel_param_objects);
+        let kernel_params = decode_hex(&krnl_payload.auth.kernel_param_objects);
         let kernel_params_tokens = vec![
             Token::Bytes(kernel_params),
             Token::Address(H160::from_slice(&sender))

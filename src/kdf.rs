@@ -1,31 +1,67 @@
 use crate::*;
 
 use std::str::FromStr;
-use bitcoin::{Address, CompressedPublicKey, Network};
 use k256::{
     elliptic_curve::{bigint::ArrayEncoding, CurveArithmetic, PrimeField, sec1::{FromEncodedPoint, ToEncodedPoint}}, EncodedPoint, Scalar, Secp256k1, U256
 };
 use near_sdk::{near_bindgen, PublicKey};
 use sha3::{Digest, Keccak256, Sha3_256};
 
+#[derive(Debug, Clone, Copy)]
+pub enum Network {
+    Bitcoin,
+    Testnet,
+}
+
 pub fn derive_btc_address(
     public_key_hex: &str,
     network: Network,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let public_key_bytes = hex::decode(public_key_hex)?;
-    let public_key = CompressedPublicKey::from_slice(&public_key_bytes)?;
-    let address = Address::p2wpkh(&public_key, network);
-    Ok(address.to_string())
+) -> String {
+    use sha2::{Digest, Sha256};
+    use ripemd::Ripemd160;
+    use bech32::{self, u5, ToBase32, Variant};
+
+    let public_key_bytes = hex::decode(public_key_hex)
+        .expect("Failed to decode public key hex string");
+
+    // Step 2: Compute the SHA256 hash of the public key.
+    let sha256_hash = Sha256::digest(&public_key_bytes);
+
+    // Step 3: Compute the RIPEMD160 hash of the SHA256 hash.
+    let ripemd160_hash = Ripemd160::digest(&sha256_hash);
+
+    // Step 4: Determine the human-readable part (hrp) based on the network.
+    let hrp = match network {
+        Network::Bitcoin => "bc",
+        Network::Testnet => "tb",
+    };
+
+    // Step 5: Prepare the witness program for Bech32 encoding.
+    let witness_version = u5::try_from_u8(0)
+        .expect("Failed to convert witness version to u5"); // Witness version 0.
+    let program_base32 = ripemd160_hash.to_base32();
+
+    // Combine the witness version and the program.
+    let mut data = vec![witness_version];
+    data.extend(program_base32);
+
+    // Step 6: Encode the address using Bech32 encoding.
+    let address = bech32::encode(hrp, data, Variant::Bech32)
+        .expect("Failed to encode BTC address in Bech32 format");
+
+    address
 }
 
-pub fn derive_eth_address(public_key_hex: &str) -> Result<String, Box<dyn std::error::Error>> {
+
+pub fn derive_eth_address(public_key_hex: &str) -> String {
     let key_hex = if public_key_hex.starts_with("04") {
         &public_key_hex[2..]
     } else {
         public_key_hex
     };
 
-    let pub_key_bytes = hex::decode(key_hex)?;
+    let pub_key_bytes = hex::decode(key_hex)
+        .expect("Failed to decode public key hex string");
 
     let mut hasher = Keccak256::new();
     hasher.update(&pub_key_bytes);
@@ -33,7 +69,7 @@ pub fn derive_eth_address(public_key_hex: &str) -> Result<String, Box<dyn std::e
 
     let eth_address = &hash[12..];
     
-    Ok(format!("0x{}", hex::encode(eth_address)))
+    format!("0x{}", hex::encode(eth_address))
 }
 
 const EPSILON_DERIVATION_PREFIX: &str = "near-mpc-recovery v0.1.0 epsilon derivation:";
@@ -54,15 +90,16 @@ pub fn derive_key(public_key: <Secp256k1 as CurveArithmetic>::AffinePoint, epsil
 pub fn near_public_key_to_affine_point(pk: near_sdk::PublicKey) -> <Secp256k1 as CurveArithmetic>::AffinePoint {
     let mut bytes = pk.into_bytes();
     bytes[0] = 0x04;
-    let point = EncodedPoint::from_bytes(bytes).unwrap();
-    <Secp256k1 as CurveArithmetic>::AffinePoint::from_encoded_point(&point).unwrap()
+    let point = EncodedPoint::from_bytes(bytes)
+        .expect("Failed to create encoded point from public key bytes");
+    <Secp256k1 as CurveArithmetic>::AffinePoint::from_encoded_point(&point)
+        .expect("Failed to convert encoded point to affine point")
 }
 
 #[near_bindgen]
 impl Contract {
     pub fn get_address(&self, path: String, chain: String, signer_id: String) -> String {
-        let derived_key = self.derived_public_key(path, signer_id)
-            .expect("Failed to derive public key");
+        let derived_key = self.derived_public_key(path, signer_id);
 
         let key_bytes = derived_key.as_bytes();
         let public_key = hex::encode(&key_bytes[1..]);
@@ -77,29 +114,28 @@ impl Contract {
                 let compressed_key = hex::encode(compressed_bytes);
                 
                 derive_btc_address(&compressed_key, Network::Testnet)
-                    .expect("Failed to derive BTC address")
             },
-            "ETH" => derive_eth_address(&public_key)
-                .expect("Failed to derive ETH address"),
+            "ETH" => derive_eth_address(&public_key),
             _ => panic!("Unsupported chain")
         }
     }
 
-    #[handle_result]
     pub fn derived_public_key(
         &self,
         path: String,
         signer_id: String
-    ) -> Result<PublicKey, Box<dyn std::error::Error>> {
+    ) -> PublicKey {
         let public_key = "secp256k1:4NfTiv3UsGahebgTaHyD9vF8KYKMBnfd6kh94mK6xv8fGBiJB8TBtFMP5WWXz6B89Ac1fbpzPwAvoyQebemHFwx3".to_string();
 
         let epsilon = derive_epsilon(&signer_id, &path);
         let derived_public_key =
-            derive_key(near_public_key_to_affine_point(near_sdk::PublicKey::from_str(&public_key).unwrap()), epsilon);
+            derive_key(near_public_key_to_affine_point(near_sdk::PublicKey::from_str(&public_key)
+                .expect("Failed to parse public key string")), epsilon);
         let encoded_point = derived_public_key.to_encoded_point(false);
         let slice: &[u8] = &encoded_point.as_bytes()[1..65];
         let mut data: Vec<u8> = vec![near_sdk::CurveType::SECP256K1 as u8];
         data.extend(slice.to_vec());
-        PublicKey::try_from(data).map_err(|_| "Failed to convert derived public key to NEAR public key".into())
+        near_sdk::PublicKey::try_from(data)
+            .expect("Failed to create NEAR public key from derived key data")
     }
 }

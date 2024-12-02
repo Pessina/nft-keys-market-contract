@@ -1,4 +1,5 @@
-use near_sdk::log;
+use krnl_auth::KrnlPayload;
+use near_sdk::{log, require};
 
 use crate::*;
 
@@ -14,7 +15,8 @@ pub struct SaleArgs {
 #[serde(crate = "near_sdk::serde")]
 pub struct OfferArgs {
     pub token_id: String,
-    pub path: String,
+    pub chain: String,
+    pub krnl_payload: KrnlPayload,
 }
 
 trait NonFungibleTokenApprovalsReceiver {
@@ -105,10 +107,9 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
                 .insert(&nft_contract_id, &by_nft_contract_id);
             log!("Updated by_nft_contract_id index");
 
-        } else if let Ok(OfferArgs { token_id: purchase_token_id, path }) = near_sdk::serde_json::from_str(&msg) {
-            log!("Processing offer with purchase_token_id: {} and path: {}", purchase_token_id, path);
-            
-            // Handle offer logic
+        } else if let Ok(OfferArgs { token_id: purchase_token_id, chain, krnl_payload}) = near_sdk::serde_json::from_str(&msg) {
+            log!("Processing offer with purchase_token_id: {}", purchase_token_id);
+
             let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, purchase_token_id);
             log!("Looking up sale for contract_and_token_id: {}", contract_and_token_id);
             
@@ -118,15 +119,16 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
             assert_ne!(sale.owner_id, signer_id, "Cannot bid on your own sale.");
             log!("Validated signer is not sale owner");
 
-            // TODO: include balance of keys validation and TA signature validation
-            log!("TODO: Validate key balances and TA signatures");
+            require!(self.is_krnl_authorized(krnl_payload.clone()), "Kernel authorization failed");
 
-            /*
-                TODO: validate if the offer token: 
-                - is approved for transfer
-                - holds the necessary amount of tokens according to the sale conditions
-            */
-            log!("TODO: Validate offer token approval and balance");
+            let wallet = self.decode_kernel_responses(krnl_payload.auth.kernel_responses);
+            let offer_address = self.get_address(format!("{},", token_id), chain, env::predecessor_account_id().to_string());
+
+            println!("Wallet wallet: {}", wallet.wallet);
+            println!("Offer address: {}", offer_address);
+
+            require!(offer_address == wallet.wallet, "Offer address does not match");
+            require!(U128::from(wallet.balance.parse::<u128>().unwrap()) >= sale.sale_conditions.amount, "Offer token does not hold the necessary amount");
 
             log!("Processing purchase with nft_contract_id: {}, signer_id: {}, token_id: {}, owner_id: {}, sale_token_id: {}", 
                 nft_contract_id, signer_id, token_id, sale.owner_id, sale.token_id);
