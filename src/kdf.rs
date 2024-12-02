@@ -23,29 +23,20 @@ pub fn derive_btc_address(
 
     let public_key_bytes = hex::decode(public_key_hex)
         .expect("Failed to decode public key hex string");
-
-    // Step 2: Compute the SHA256 hash of the public key.
+    
     let sha256_hash = Sha256::digest(&public_key_bytes);
-
-    // Step 3: Compute the RIPEMD160 hash of the SHA256 hash.
     let ripemd160_hash = Ripemd160::digest(&sha256_hash);
-
-    // Step 4: Determine the human-readable part (hrp) based on the network.
     let hrp = match network {
         Network::Bitcoin => "bc",
         Network::Testnet => "tb",
     };
-
-    // Step 5: Prepare the witness program for Bech32 encoding.
+    
     let witness_version = u5::try_from_u8(0)
-        .expect("Failed to convert witness version to u5"); // Witness version 0.
+        .expect("Failed to convert witness version to u5");
     let program_base32 = ripemd160_hash.to_base32();
-
-    // Combine the witness version and the program.
     let mut data = vec![witness_version];
-    data.extend(program_base32);
 
-    // Step 6: Encode the address using Bech32 encoding.
+    data.extend(program_base32);
     let address = bech32::encode(hrp, data, Variant::Bech32)
         .expect("Failed to encode BTC address in Bech32 format");
 

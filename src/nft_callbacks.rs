@@ -15,7 +15,6 @@ pub struct SaleArgs {
 #[serde(crate = "near_sdk::serde")]
 pub struct OfferArgs {
     pub token_id: String,
-    pub chain: String,
     pub krnl_payload: KrnlPayload,
 }
 
@@ -107,7 +106,7 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
                 .insert(&nft_contract_id, &by_nft_contract_id);
             log!("Updated by_nft_contract_id index");
 
-        } else if let Ok(OfferArgs { token_id: purchase_token_id, chain, krnl_payload}) = near_sdk::serde_json::from_str(&msg) {
+        } else if let Ok(OfferArgs { token_id: purchase_token_id, krnl_payload}) = near_sdk::serde_json::from_str(&msg) {
             log!("Processing offer with purchase_token_id: {}", purchase_token_id);
 
             let contract_and_token_id = format!("{}{}{}", nft_contract_id, DELIMETER, purchase_token_id);
@@ -122,7 +121,7 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
             require!(self.is_krnl_authorized(krnl_payload.clone()), "Kernel authorization failed");
 
             let wallet = self.decode_kernel_responses(krnl_payload.auth.kernel_responses);
-            let offer_address = self.get_address(format!("{},", token_id), chain, env::predecessor_account_id().to_string());
+            let offer_address = self.get_address(format!("{},", token_id), sale.sale_conditions.token, env::predecessor_account_id().to_string());
 
             println!("Wallet wallet: {}", wallet.wallet);
             println!("Offer address: {}", offer_address);
