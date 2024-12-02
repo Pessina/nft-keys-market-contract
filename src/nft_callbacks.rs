@@ -123,8 +123,8 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
             let wallet = self.decode_kernel_responses(krnl_payload.auth.kernel_responses);
             let offer_address = self.get_address(format!("{},", token_id), sale.sale_conditions.token, env::predecessor_account_id().to_string());
 
-            println!("Wallet wallet: {}", wallet.wallet);
-            println!("Offer address: {}", offer_address);
+            log!("Wallet wallet: {}", wallet.wallet);
+            log!("Offer address: {}", offer_address);
 
             require!(offer_address == wallet.wallet, "Offer address does not match");
             require!(U128::from(wallet.balance.parse::<u128>().unwrap()) >= sale.sale_conditions.amount, "Offer token does not hold the necessary amount");
