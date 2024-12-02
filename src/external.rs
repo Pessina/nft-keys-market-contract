@@ -1,3 +1,5 @@
+use near_sdk::{PromiseOrValue, PublicKey};
+
 use crate::*;
 
 //initiate a cross contract call to the nft contract
@@ -18,4 +20,9 @@ trait ExtContract {
         approved_account_id: AccountId,
         approval_id: u64,
     );
+    fn ckt_public_key_for(
+        &mut self,
+        token_id: TokenId,
+        path: Option<String>,
+    ) -> PromiseOrValue<PublicKey>;
 }
