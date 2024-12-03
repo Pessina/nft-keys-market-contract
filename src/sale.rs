@@ -58,6 +58,8 @@ impl Contract {
     ) -> Promise {
         let sale = self.internal_remove_sale(nft_contract_id.clone(), seller_token_id.clone());
 
+        // TODO: Check if contract is approved to transfer the NFT for both buyer and seller
+        // TODO: If any of the transfer fail revert the full process
         ext_contract::ext(nft_contract_id.clone())
             .with_attached_deposit(ONE_YOCTONEAR)
             .with_static_gas(GAS_FOR_NFT_TRANSFER)
