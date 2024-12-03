@@ -185,8 +185,8 @@ fn test_decode_kernel_responses() {
     let kernel_response = contract.decode_kernel_responses(kernel_responses);
 
     // Assert the decoded values match expected
-    assert_eq!(kernel_response.address, "2584426");
-    assert_eq!(kernel_response.balance, "tb1qp47syg7nq26w3mehq594yq93cvcx4eatrvrtmc");
+    assert_eq!(kernel_response.balance, "2584426");
+    assert_eq!(kernel_response.address, "tb1qp47syg7nq26w3mehq594yq93cvcx4eatrvrtmc");
 }
 
 #[test]

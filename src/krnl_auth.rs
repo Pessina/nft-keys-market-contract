@@ -9,8 +9,11 @@ use ethabi::{decode, ethereum_types::H160, ParamType, Token};
 use schemars::JsonSchema;
 
 use crate::*;
+// BTC
+// const TOKEN_AUTHORITY_ADDRESS: &str = "Cf7DDd53574c3664e58fb3f70209c626409406F1"; 
 
-const TOKEN_AUTHORITY_ADDRESS: &str = "Cf7DDd53574c3664e58fb3f70209c626409406F1"; 
+// ETH
+const TOKEN_AUTHORITY_ADDRESS: &str = "7D32525C5Fe87DC4E67995db9bCd7c53c64B227D"; 
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(crate = "near_sdk::serde")]
