@@ -13,7 +13,7 @@ use crate::*;
 // const TOKEN_AUTHORITY_ADDRESS: &str = "Cf7DDd53574c3664e58fb3f70209c626409406F1"; 
 
 // ETH
-const TOKEN_AUTHORITY_ADDRESS: &str = "7D32525C5Fe87DC4E67995db9bCd7c53c64B227D"; 
+const TOKEN_AUTHORITY_ADDRESS: &str = "F304b860b945EB84146830018E8c72Ffb270674A"; 
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(crate = "near_sdk::serde")]
