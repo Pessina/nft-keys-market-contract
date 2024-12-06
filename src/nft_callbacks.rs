@@ -132,6 +132,7 @@ impl NonFungibleTokenApprovalsReceiver for Contract {
                 require!(U128::from(wallet.balance.parse::<u128>().unwrap()) >= sale.sale_conditions.amount, "Offer token does not hold the necessary amount");
 
                 // Check if the key being offered was never used to sign any transaction
+                // Check bugs on approvals
             }
 
             log!("Processing purchase with nft_contract_id: {}, signer_id: {}, token_id: {}, owner_id: {}, sale_token_id: {}", 
